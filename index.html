@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a0c; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+        /* Schermata Login / Registrazione Sicura */
+        #auth-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0c; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
+        .auth-card { background: #121216; padding: 30px; border-radius: 12px; border: 1px solid #262630; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        .auth-card h2 { color: #94dadd; text-align: center; margin-bottom: 5px; font-size: 1.6rem; }
+        .auth-card input { padding: 12px; border-radius: 8px; border: 1px solid #3a3a4c; background: #1a1a24; color: #fff; outline: none; font-size: 0.95rem; }
+        .btn-primary { padding: 12px; border-radius: 8px; border: none; background: #7b2cbf; color: #fff; font-weight: bold; cursor: pointer; font-size: 0.95rem; transition: 0.2s; }
+        .btn-primary:hover { background: #94aded; }
+        .btn-google { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #ffffff; color: #000; font-weight: bold; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .auth-switch { text-align: center; font-size: 0.85rem; color: #888; margin-top: 10px; cursor: pointer; }
+        .auth-switch span { color: #94dadd; }
+
+        /* Chat principale */
+        #chat-container { display: none; flex-direction: column; height: 100%; width: 100%; max-width: 800px; margin: 0 auto; background: #0a0a0c; }
+        header { background: #121216; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #262630; }
+        header h1 { font-size: 1.2rem; color: #94dadd; }
+        .logout-btn { background: transparent; border: 1px solid #ff4d4d; color: #ff4d4d; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        
+        #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .message { background: #1a1a24; padding: 10px 14px; border-radius: 8px; max-width: 75%; word-break: break-word; border: 1px solid #262630; }
+        .message.mine { background: #7b2cbf; align-self: flex-end; border: none; }
+        .message .user { font-size: 0.75rem; color: #94dadd; margin-bottom: 3px; font-weight: bold; }
+        .message.mine .user { color: #e0d0ff; }
+
+        .chat-input-area { padding: 15px 20px; background: #121216; display: flex; gap: 10px; border-top: 1px solid #262630; }
+        .chat-input-area input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #3a3a4c; background: #1a1a24; color: #fff; outline: none; }
+        .chat-input-area button { padding: 0 20px; border-radius: 8px; border: none; background: #7b2cbf; color: #fff; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <!-- Schermata di Autenticazione -->
+    <div id="auth-screen">
+        <div class="auth-card" id="login-box">
+            <h2>⚡ Shadow Chat</h2>
+            <input type="email" id="email" placeholder="La tua email">
+            <input type="password" id="password" placeholder="Password">
+            <button class="btn-primary" onclick="handleEmailAuth(true)">Accedi</button>
+            <button class="btn-google" onclick="handleGoogleAuth()">Accedi con Google</button>
+            <div class="auth-switch" onclick="toggleAuthMode()">Non hai un account? <span>Registrati con Email</span></div>
+        </div>
+    </div>
+
+    <!-- Schermata Principale della Chat -->
+    <div id="chat-container">
+        <header>
+            <h1 id="room-title">Shadow Chat Room</h1>
+            <button class="logout-btn" onclick="handleLogout()">Esci</button>
+        </header>
+        <div id="messages"></div>
+        <div class="chat-input-area">
+            <input type="text" id="message-input" placeholder="Scrivi un messaggio..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">Invia</button>
+        </div>
+    </div>
+
+    <script>
+        // Configurazione Supabase configurata
+        const SUPABASE_URL = 'https://zscwbjpozyrptlilbule.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_gQrM4XJB_60vXTDy-C6wtw_TeV91PWF';
+
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const socket = io();
+
+        let currentUser = null;
+        let isRegistering = false;
+
+        async function checkUser() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                showChat();
+            }
+        }
+
+        async function handleEmailAuth(isLogin) {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (isRegistering) {
+                const { data, error } = await supabaseClient.auth.signUp({ email, password });
+                if (error) alert(error.message);
+                else { alert('Registrazione completata! Controlla la tua email se richiesta, oppure accedi.'); isRegistering = false; toggleAuthMode(); }
+            } else {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) alert(error.message);
+                else { currentUser = data.user; showChat(); }
+            }
+        }
+
+        async function handleGoogleAuth() {
+            const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google' });
+            if (error) alert(error.message);
+        }
+
+        function toggleAuthMode() {
+            isRegistering = !isRegistering;
+            const box = document.getElementById('login-box');
+            if (isRegistering) {
+                box.querySelector('h2').innerText = "Registrati";
+                box.querySelector('.btn-primary').innerText = "Registrati";
+                box.querySelector('.auth-switch').innerHTML = "Hai già un account? <span>Accedi</span>";
+            } else {
+                box.querySelector('h2').innerText = "⚡ Shadow Chat";
+                box.querySelector('.btn-primary').innerText = "Accedi";
+                box.querySelector('.auth-switch').innerHTML = "Non hai un account? <span>Registrati con Email</span>";
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+            location.reload();
+        }
+
+        function showChat() {
+            document.getElementById('auth-screen').style.display = 'none';
+            document.getElementById('chat-container').style.display = 'flex';
+            loadMessages();
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (!text || !currentUser) return;
+
+            const msgData = {
+                user: currentUser.email,
+                text: text,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+
+            socket.emit('chat_message', msgData);
+            input.value = '';
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        socket.on('chat_message', (msg) => {
+            const messagesDiv = document.getElementById('messages');
+            const msgEl = document.createElement('div');
+            msgEl.className = `message ${currentUser && msg.user === currentUser.email ? 'mine' : ''}`;
+            msgEl.innerHTML = `<div class="user">${msg.user}</div><div>${msg.text}</div>`;
+            messagesDiv.appendChild(msgEl);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+
+        async function loadMessages() {
+            // Caricamento dei messaggi da Supabase
+        }
+
+        checkUser();
+    </script>
+</body>
+</html>
