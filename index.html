@@ -5,120 +5,116 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shadow Chat</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="/socket.io/socket.io.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a0c; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a0c; color: #fff; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
-        /* Schermata Login / Registrazione Sicura */
-        #auth-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0c; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
-        .auth-card { background: #121216; padding: 30px; border-radius: 12px; border: 1px solid #262630; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-        .auth-card h2 { color: #94dadd; text-align: center; margin-bottom: 5px; font-size: 1.6rem; }
-        .auth-card input { padding: 12px; border-radius: 8px; border: 1px solid #3a3a4c; background: #1a1a24; color: #fff; outline: none; font-size: 0.95rem; }
-        .btn-primary { padding: 12px; border-radius: 8px; border: none; background: #7b2cbf; color: #fff; font-weight: bold; cursor: pointer; font-size: 0.95rem; transition: 0.2s; }
-        .btn-primary:hover { background: #94aded; }
-        .btn-google { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #ffffff; color: #000; font-weight: bold; cursor: pointer; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .auth-switch { text-align: center; font-size: 0.85rem; color: #888; margin-top: 10px; cursor: pointer; }
-        .auth-switch span { color: #94dadd; }
+        /* Auth Screen */
+        #auth-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0c; display: flex; justify-content: center; align-items: center; z-index: 1000; padding: 20px; }
+        .card { background: #121216; padding: 30px; border-radius: 12px; border: 1px solid #262630; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+        h2 { color: #94dadd; margin-bottom: 5px; }
+        input[type="text"], input[type="password"] { padding: 12px; border-radius: 8px; border: 1px solid #3a3a4c; background: #1a1a24; color: #fff; outline: none; font-size: 1rem; width: 100%; }
+        .btn-auth { padding: 12px; border-radius: 8px; border: none; background: #7b2cbf; color: #fff; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.2s; }
+        .btn-auth:hover { background: #94aded; }
+        .switch { font-size: 0.85rem; color: #888; margin-top: 10px; cursor: pointer; }
+        .switch span { color: #94dadd; text-decoration: underline; }
 
-        /* Chat principale */
-        #chat-container { display: none; flex-direction: column; height: 100%; width: 100%; max-width: 800px; margin: 0 auto; background: #0a0a0c; }
+        /* Chat UI */
+        #chat-container { display: none; flex-direction: column; height: 100vh; width: 100%; max-width: 800px; margin: 0 auto; background: #0a0a0c; }
         header { background: #121216; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #262630; }
         header h1 { font-size: 1.2rem; color: #94dadd; }
-        .logout-btn { background: transparent; border: 1px solid #ff4d4d; color: #ff4d4d; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
-        
-        #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .message { background: #1a1a24; padding: 10px 14px; border-radius: 8px; max-width: 75%; word-break: break-word; border: 1px solid #262630; }
-        .message.mine { background: #7b2cbf; align-self: flex-end; border: none; }
-        .message .user { font-size: 0.75rem; color: #94dadd; margin-bottom: 3px; font-weight: bold; }
-        .message.mine .user { color: #e0d0ff; }
+        .logout-btn { background: transparent; border: 1px solid #ff4d4d; color: #ff4d4d; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
 
-        .chat-input-area { padding: 15px 20px; background: #121216; display: flex; gap: 10px; border-top: 1px solid #262630; }
-        .chat-input-area input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #3a3a4c; background: #1a1a24; color: #fff; outline: none; }
-        .chat-input-area button { padding: 0 20px; border-radius: 8px; border: none; background: #7b2cbf; color: #fff; font-weight: bold; cursor: pointer; }
+        #messages { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+        .message { background: #1a1a24; padding: 10px 14px; border-radius: 10px; max-width: 80%; border: 1px solid #262630; position: relative; align-self: flex-start; word-break: break-word; }
+        .message.mine { background: #7b2cbf; align-self: flex-end; border: none; }
+        .message .user { font-size: 0.75rem; color: #94dadd; margin-bottom: 4px; font-weight: bold; }
+        .message.mine .user { color: #e0d0ff; }
+        .message img { max-width: 100%; border-radius: 8px; margin-top: 5px; display: block; }
+        .delete-btn { background: transparent; border: none; color: #ff6b6b; cursor: pointer; font-size: 0.75rem; margin-top: 6px; display: inline-block; text-decoration: underline; }
+
+        .chat-input-area { padding: 15px 20px; background: #121216; display: flex; gap: 10px; align-items: center; border-top: 1px solid #262630; }
+        .chat-input-area input[type="text"] { flex: 1; }
+        .img-label { background: #262630; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
+        .send-btn { padding: 0 20px; height: 42px; border-radius: 8px; border: none; background: #7b2cbf; color: #fff; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <!-- Schermata di Autenticazione -->
+    <!-- Schermata Auth -->
     <div id="auth-screen">
-        <div class="auth-card" id="login-box">
-            <h2>⚡ Shadow Chat</h2>
-            <input type="email" id="email" placeholder="La tua email">
-            <input type="password" id="password" placeholder="Password">
-            <button class="btn-primary" onclick="handleEmailAuth(true)">Accedi</button>
-            <button class="btn-google" onclick="handleGoogleAuth()">Accedi con Google</button>
-            <div class="auth-switch" onclick="toggleAuthMode()">Non hai un account? <span>Registrati con Email</span></div>
+        <div class="card" id="auth-box">
+            <h2 id="title">⚡ Shadow Chat</h2>
+            <input type="text" id="username" placeholder="Inserisci un nome a caso">
+            <input type="password" id="password" placeholder="Inserisci una password">
+            <button class="btn-auth" id="btn-submit" onclick="handleAuth()">Accedi</button>
+            <div class="switch" onclick="toggleMode()">Non hai un account? <span id="switch-text">Crea Account</span></div>
         </div>
     </div>
 
-    <!-- Schermata Principale della Chat -->
+    <!-- Schermata Chat -->
     <div id="chat-container">
         <header>
-            <h1 id="room-title">Shadow Chat Room</h1>
-            <button class="logout-btn" onclick="handleLogout()">Esci</button>
+            <h1 id="user-display">Shadow Chat</h1>
+            <button class="logout-btn" onclick="logout()">Esci</button>
         </header>
+
         <div id="messages"></div>
+
         <div class="chat-input-area">
+            <label class="img-label" title="Allega foto">
+                📷
+                <input type="file" id="image-input" accept="image/*" style="display: none;" onchange="sendImage(this)">
+            </label>
             <input type="text" id="message-input" placeholder="Scrivi un messaggio..." onkeypress="handleKeyPress(event)">
-            <button onclick="sendMessage()">Invia</button>
+            <button class="send-btn" onclick="sendTextMessage()">Invia</button>
         </div>
     </div>
 
     <script>
-        // Configurazione Supabase configurata
         const SUPABASE_URL = 'https://zscwbjpozyrptlilbule.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_gQrM4XJB_60vXTDy-C6wtw_TeV91PWF';
-
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const socket = io();
+        const SUPABASE_KEY = 'sb_publishable_gQrM4XJB_60vXTDy-C6wtw_TeV91PWF';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentUser = null;
         let isRegistering = false;
+        let localMessages = JSON.parse(localStorage.getItem('shadow_chat_msg') || '[]');
 
-        async function checkUser() {
-            const { data: { session } } = await supabaseClient.auth.getSession();
-            if (session) {
-                currentUser = session.user;
-                showChat();
-            }
+        function toggleMode() {
+            isRegistering = !isRegistering;
+            document.getElementById('title').innerText = isRegistering ? "Crea Account" : "⚡ Shadow Chat";
+            document.getElementById('btn-submit').innerText = isRegistering ? "Registrati" : "Accedi";
+            document.getElementById('switch-text').innerText = isRegistering ? "Accedi" : "Crea Account";
         }
 
-        async function handleEmailAuth(isLogin) {
-            const email = document.getElementById('email').value;
+        async function handleAuth() {
+            const usernameInput = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
 
+            if (!usernameInput || !password) return alert('Inserisci sia nome che password!');
+
+            const fakeEmail = usernameInput.includes('@') ? usernameInput : `${usernameInput}@chat.com`;
+
             if (isRegistering) {
-                const { data, error } = await supabaseClient.auth.signUp({ email, password });
-                if (error) alert(error.message);
-                else { alert('Registrazione completata! Controlla la tua email se richiesta, oppure accedi.'); isRegistering = false; toggleAuthMode(); }
+                const { error } = await supabaseClient.auth.signUp({ email: fakeEmail, password });
+                if (error) {
+                    alert('Errore: ' + error.message);
+                } else {
+                    alert('Account creato! Clicca su Accedi per entrare.');
+                    toggleMode();
+                }
             } else {
-                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-                if (error) alert(error.message);
-                else { currentUser = data.user; showChat(); }
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email: fakeEmail, password });
+                if (error) {
+                    alert('Errore di accesso: controlla il nome o la password.');
+                } else {
+                    currentUser = data.user;
+                    showChat();
+                }
             }
         }
 
-        async function handleGoogleAuth() {
-            const { error } = await supabaseClient.auth.signInWithOAuth({ provider: 'google' });
-            if (error) alert(error.message);
-        }
-
-        function toggleAuthMode() {
-            isRegistering = !isRegistering;
-            const box = document.getElementById('login-box');
-            if (isRegistering) {
-                box.querySelector('h2').innerText = "Registrati";
-                box.querySelector('.btn-primary').innerText = "Registrati";
-                box.querySelector('.auth-switch').innerHTML = "Hai già un account? <span>Accedi</span>";
-            } else {
-                box.querySelector('h2').innerText = "⚡ Shadow Chat";
-                box.querySelector('.btn-primary').innerText = "Accedi";
-                box.querySelector('.auth-switch').innerHTML = "Non hai un account? <span>Registrati con Email</span>";
-            }
-        }
-
-        async function handleLogout() {
+        async function logout() {
             await supabaseClient.auth.signOut();
             location.reload();
         }
@@ -126,42 +122,80 @@
         function showChat() {
             document.getElementById('auth-screen').style.display = 'none';
             document.getElementById('chat-container').style.display = 'flex';
-            loadMessages();
+            const name = currentUser.email.split('@')[0];
+            document.getElementById('user-display').innerText = `⚡ ${name}`;
+            renderMessages();
         }
 
-        function sendMessage() {
+        function renderMessages() {
+            const container = document.getElementById('messages');
+            container.innerHTML = '';
+            const myName = currentUser ? currentUser.email.split('@')[0] : '';
+
+            localMessages.forEach((msg, index) => {
+                const isMine = msg.user === myName;
+                const div = document.createElement('div');
+                div.className = `message ${isMine ? 'mine' : ''}`;
+                
+                let contentHTML = `<div class="user">${msg.user}</div>`;
+                if (msg.text) contentHTML += `<div>${msg.text}</div>`;
+                if (msg.image) contentHTML += `<img src="${msg.image}" alt="Foto">`;
+                contentHTML += `<button class="delete-btn" onclick="deleteMessage(${index})">Elimina</button>`;
+
+                div.innerHTML = contentHTML;
+                container.appendChild(div);
+            });
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function sendTextMessage() {
             const input = document.getElementById('message-input');
             const text = input.value.trim();
             if (!text || !currentUser) return;
 
-            const msgData = {
-                user: currentUser.email,
-                text: text,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
-
-            socket.emit('chat_message', msgData);
+            const myName = currentUser.email.split('@')[0];
+            localMessages.push({ user: myName, text: text, image: null });
+            saveAndRender();
             input.value = '';
         }
 
+        function sendImage(input) {
+            const file = input.files[0];
+            if (!file || !currentUser) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const myName = currentUser.email.split('@')[0];
+                localMessages.push({ user: myName, text: '', image: e.target.result });
+                saveAndRender();
+                input.value = '';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function deleteMessage(index) {
+            localMessages.splice(index, 1);
+            saveAndRender();
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('shadow_chat_msg', JSON.stringify(localMessages));
+            renderMessages();
+        }
+
         function handleKeyPress(e) {
-            if (e.key === 'Enter') sendMessage();
+            if (e.key === 'Enter') sendTextMessage();
         }
 
-        socket.on('chat_message', (msg) => {
-            const messagesDiv = document.getElementById('messages');
-            const msgEl = document.createElement('div');
-            msgEl.className = `message ${currentUser && msg.user === currentUser.email ? 'mine' : ''}`;
-            msgEl.innerHTML = `<div class="user">${msg.user}</div><div>${msg.text}</div>`;
-            messagesDiv.appendChild(msgEl);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        });
-
-        async function loadMessages() {
-            // Caricamento dei messaggi da Supabase
+        async function init() {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session) {
+                currentUser = session.user;
+                showChat();
+            }
         }
-
-        checkUser();
+        init();
     </script>
 </body>
 </html>
